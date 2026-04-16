@@ -56,23 +56,11 @@ async def send_document(
     return 0, "Max retries exceeded"
 
 
-async def process_chunk(
-    token: str,
-    chunk: bytes,
-    name: str,
-    chat_id: int,
-    max_retries: int,
-    retry_delay: float,
-) -> None:
-    await send_document(token, chat_id, chunk, name, max_retries, retry_delay)
-    print(f"Sent {len(chunk)} bytes, filename={name}")
-
-
 async def main(
     token: str,
     chat_id: int,
     name: str = "document",
-    chunk_size: int = 15 * 1024 * 1024,
+    chunk_size: int = 10 * 1024 * 1024,
     max_concurrency: int = 4,
     max_retries: int = 5,
     retry_delay: float = 1.5,
@@ -105,9 +93,10 @@ async def main(
 
             async with semaphore:
                 try:
-                    await process_chunk(
-                        token, chunk, filename, chat_id, max_retries, retry_delay
+                    await send_document(
+                        token, chat_id, chunk, filename, max_retries, retry_delay
                     )
+                    print(f"Sent {len(chunk)} bytes, filename={name}")
                 except Exception as e:
                     print(f"Part {filename} failed: {e}", file=sys.stderr)
 
