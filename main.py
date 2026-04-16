@@ -10,28 +10,50 @@ import aiohttp
 
 
 async def send_document(
-    token: str, chat_id: int, file: bytes, filename: str = "document"
+    token: str,
+    chat_id: int,
+    file: bytes,
+    filename: str = "document",
+    max_retries: int = 5,
+    retry_delay: float = 1.5,
 ) -> Tuple[int, str]:
     url = f"https://tapi.bale.ai/bot{token}/sendDocument"
 
-    form_data = aiohttp.FormData()
-    form_data.add_field("chat_id", str(chat_id))
-    form_data.add_field(
-        "document",
-        io.BytesIO(file),
-        filename=filename,
-        content_type="application/octet-stream",
-    )
+    for attempt in range(max_retries + 1):
+        form_data = aiohttp.FormData()
+        form_data.add_field("chat_id", str(chat_id))
+        form_data.add_field(
+            "document",
+            io.BytesIO(file),
+            filename=filename,
+            content_type="application/octet-stream",
+        )
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, data=form_data) as response:
-            response_text = await response.text()
-            if not response.ok:
-                print(
-                    f"API error, status={response.status} text={response_text}",
-                    file=sys.stderr,
-                )
-            return response.status, response_text
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(120)
+            ) as session:
+                async with session.post(url, data=form_data) as response:
+                    response_text = await response.text()
+
+                    if response.ok:
+                        return response.status, response_text
+
+                    print(
+                        f"Attempt {attempt + 1}/{max_retries + 1} failed, "
+                        f"status={response.status}, text={response_text}",
+                        file=sys.stderr,
+                    )
+        except Exception as e:
+            print(
+                f"Attempt {attempt + 1}/{max_retries + 1} exception: {e}",
+                file=sys.stderr,
+            )
+
+        if attempt < max_retries:
+            await asyncio.sleep(retry_delay * (2**attempt))
+
+    return 0, "Max retries exceeded"
 
 
 async def process_chunk(
@@ -39,8 +61,10 @@ async def process_chunk(
     chunk: bytes,
     name: str,
     chat_id: int,
+    max_retries: int,
+    retry_delay: float,
 ) -> None:
-    await send_document(token, chat_id, chunk, name)
+    await send_document(token, chat_id, chunk, name, max_retries, retry_delay)
     print(f"Sent {len(chunk)} bytes, filename={name}")
 
 
@@ -50,6 +74,8 @@ async def main(
     name: str = "document",
     chunk_size: int = 15 * 1024 * 1024,
     max_concurrency: int = 4,
+    max_retries: int = 5,
+    retry_delay: float = 1.5,
 ) -> None:
     semaphore = asyncio.Semaphore(max_concurrency)
     queue: asyncio.Queue = asyncio.Queue()
@@ -79,7 +105,9 @@ async def main(
 
             async with semaphore:
                 try:
-                    await process_chunk(token, chunk, filename, chat_id)
+                    await process_chunk(
+                        token, chunk, filename, chat_id, max_retries, retry_delay
+                    )
                 except Exception as e:
                     print(f"Part {filename} failed: {e}", file=sys.stderr)
 
@@ -129,6 +157,20 @@ if __name__ == "__main__":
         help="Concurrent file chunk processing :3",
         default=1,
     )
+    parser.add_argument(
+        "--max-retries",
+        "-r",
+        type=int,
+        help="Maximum retry attempts per chunk :3",
+        default=5,
+    )
+    parser.add_argument(
+        "--retry-delay",
+        "-d",
+        type=float,
+        help="Initial retry delay in seconds (exponential backoff) :3",
+        default=1.5,
+    )
 
     args = parser.parse_args()
 
@@ -139,5 +181,7 @@ if __name__ == "__main__":
             name=args.name,
             chunk_size=args.chunk_size,
             max_concurrency=args.concurrency,
+            max_retries=args.max_retries,
+            retry_delay=args.retry_delay,
         )
     )
