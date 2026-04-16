@@ -19,20 +19,21 @@ async def send_document(
 ) -> Tuple[int, str]:
     url = f"https://tapi.bale.ai/bot{token}/sendDocument"
 
-    for attempt in range(max_retries + 1):
-        form_data = aiohttp.FormData()
-        form_data.add_field("chat_id", str(chat_id))
-        form_data.add_field(
-            "document",
-            io.BytesIO(file),
-            filename=filename,
-            content_type="application/octet-stream",
-        )
+    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+    timeout = aiohttp.ClientTimeout(total=120)
 
-        try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(120)
-            ) as session:
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        for attempt in range(max_retries + 1):
+            form_data = aiohttp.FormData()
+            form_data.add_field("chat_id", str(chat_id))
+            form_data.add_field(
+                "document",
+                io.BytesIO(file),
+                filename=filename,
+                content_type="application/octet-stream",
+            )
+
+            try:
                 async with session.post(url, data=form_data) as response:
                     response_text = await response.text()
 
@@ -44,14 +45,14 @@ async def send_document(
                         f"status={response.status}, text={response_text}",
                         file=sys.stderr,
                     )
-        except Exception as e:
-            print(
-                f"Attempt {attempt + 1}/{max_retries + 1} exception: {e}",
-                file=sys.stderr,
-            )
+            except Exception as e:
+                print(
+                    f"Attempt {attempt + 1}/{max_retries + 1} exception: {e}",
+                    file=sys.stderr,
+                )
 
-        if attempt < max_retries:
-            await asyncio.sleep(retry_delay * (2**attempt))
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay * (1.5 * attempt))
 
     return 0, "Max retries exceeded"
 
