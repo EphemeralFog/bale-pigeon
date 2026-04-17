@@ -1,9 +1,10 @@
 [project]
-name = "stdin-to-bale"
+name = "file-to-bale"
 version = "0.1.0"
-description = "Add your description here"
+description = "transfer files using Bale painlessly."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiofiles>=25.1.0",
     "aiohttp>=3.13.5",
 ]

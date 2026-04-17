@@ -4,8 +4,9 @@ import argparse
 import asyncio
 import io
 import sys
-from typing import Tuple
+from typing import Optional, Tuple
 
+import aiofiles
 import aiohttp
 
 
@@ -65,23 +66,34 @@ async def main(
     max_concurrency: int = 4,
     max_retries: int = 5,
     retry_delay: float = 1.5,
+    file_path: Optional[str] = None,
+    use_stdin: bool = False,
 ) -> None:
     semaphore = asyncio.Semaphore(max_concurrency)
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=max_concurrency * 2)
 
     part = 0
 
     async def producer():
         nonlocal part
-        while True:
-            chunk = sys.stdin.buffer.read(chunk_size)
 
-            if not chunk:
-                await queue.put(None)
-                return
-
-            await queue.put((chunk, f"{name}.{part}"))
-            part += 1
+        if use_stdin:
+            while True:
+                chunk = sys.stdin.buffer.read(chunk_size)
+                if not chunk:
+                    await queue.put(None)
+                    return
+                await queue.put((chunk, f"{name}.{part}"))
+                part += 1
+        elif file_path:
+            async with aiofiles.open(file_path, "rb") as f:
+                while True:
+                    chunk = await f.read(chunk_size)
+                    if not chunk:
+                        await queue.put(None)
+                        return
+                    await queue.put((chunk, f"{name}.{part}"))
+                    part += 1
 
     async def consumer():
         while True:
@@ -94,10 +106,13 @@ async def main(
 
             async with semaphore:
                 try:
-                    await send_document(
+                    status, response = await send_document(
                         token, chat_id, chunk, filename, max_retries, retry_delay
                     )
-                    print(f"Sent {len(chunk)} bytes, filename={name}")
+                    if status == 200:
+                        print(f"Sent {len(chunk)} bytes as {filename}")
+                    else:
+                        print(f"Failed to send {filename}: {response}", file=sys.stderr)
                 except Exception as e:
                     print(f"Part {filename} failed: {e}", file=sys.stderr)
 
@@ -111,7 +126,7 @@ async def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Standard input to Bale :3")
+    parser = argparse.ArgumentParser(description="File/STDIN to Bale :3")
     parser.add_argument(
         "--chat-id",
         "-c",
@@ -130,9 +145,25 @@ if __name__ == "__main__":
         "--name",
         "-n",
         type=str,
-        help="The filename to use when uploading :3",
+        help="The filename base to use when uploading :3",
         required=True,
     )
+
+    input_group = parser.add_mutually_exclusive_group(required=True)
+
+    input_group.add_argument(
+        "--stdin",
+        "-i",
+        action="store_true",
+        help="Read input from stdin (default behavior without --file)",
+    )
+    input_group.add_argument(
+        "--file",
+        "-f",
+        type=str,
+        help="Path to file to read chunk by chunk",
+    )
+
     parser.add_argument(
         "--chunk-size",
         "-s",
@@ -173,5 +204,7 @@ if __name__ == "__main__":
             max_concurrency=args.concurrency,
             max_retries=args.max_retries,
             retry_delay=args.retry_delay,
+            file_path=args.file,
+            use_stdin=args.stdin,
         )
     )
