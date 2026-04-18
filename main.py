@@ -20,7 +20,7 @@ async def send_document(
 ) -> Tuple[int, str]:
     url = f"https://tapi.bale.ai/bot{token}/sendDocument"
 
-    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
     timeout = aiohttp.ClientTimeout(total=120)
 
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
