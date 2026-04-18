@@ -68,6 +68,7 @@ async def main(
     retry_delay: float = 1.5,
     file_path: Optional[str] = None,
     use_stdin: bool = False,
+    cooldown: float = 0,
 ) -> None:
     semaphore = asyncio.Semaphore(max_concurrency)
     queue: asyncio.Queue = asyncio.Queue(maxsize=max_concurrency * 2)
@@ -113,6 +114,8 @@ async def main(
                         print(f"Sent {len(chunk)} bytes as {filename}")
                     else:
                         print(f"Failed to send {filename}: {response}", file=sys.stderr)
+
+                    await asyncio.sleep(cooldown)
                 except Exception as e:
                     print(f"Part {filename} failed: {e}", file=sys.stderr)
 
@@ -192,6 +195,13 @@ if __name__ == "__main__":
         help="Initial retry delay in seconds (exponential backoff) :3",
         default=1.5,
     )
+    parser.add_argument(
+        "--cooldown",
+        "-l",
+        type=float,
+        help="Cooldown delay between uploads in seconds :3",
+        default=0,
+    )
 
     args = parser.parse_args()
 
@@ -206,5 +216,6 @@ if __name__ == "__main__":
             retry_delay=args.retry_delay,
             file_path=args.file,
             use_stdin=args.stdin,
+            cooldown=args.cooldown,
         )
     )
