@@ -15,7 +15,7 @@ async def send_document(
     chat_id: int,
     file: bytes,
     filename: str = "document",
-    max_retries: int = 5,
+    max_retries: int = 50,
     retry_delay: float = 1.5,
 ) -> Tuple[int, str]:
     url = f"https://tapi.bale.ai/bot{token}/sendDocument"
@@ -64,7 +64,7 @@ async def main(
     name: str = "document",
     chunk_size: int = 10 * 1024 * 1024,
     max_concurrency: int = 4,
-    max_retries: int = 5,
+    max_retries: int = 50,
     retry_delay: float = 1.5,
     file_path: Optional[str] = None,
     use_stdin: bool = False,
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         "-r",
         type=int,
         help="Maximum retry attempts per chunk :3",
-        default=5,
+        default=50,
     )
     parser.add_argument(
         "--retry-delay",
