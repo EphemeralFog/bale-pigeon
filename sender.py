@@ -71,7 +71,7 @@ async def main(
     cooldown: float = 0,
 ) -> None:
     semaphore = asyncio.Semaphore(max_concurrency)
-    queue: asyncio.Queue = asyncio.Queue(maxsize=max_concurrency * 2)
+    queue: asyncio.Queue[Optional[tuple[bytes, str]]] = asyncio.Queue(maxsize=max_concurrency * 2)
 
     part = 0
 
