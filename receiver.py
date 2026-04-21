@@ -114,9 +114,8 @@ async def download_file(
             await asyncio.sleep(delay)
 
 
-@dp.message()  # type: ignore
+@dp.message(lambda m: m.chat.id in CHAT_IDS)  # type: ignore
 async def message_handler(m: Message) -> None:
-    print(m)
     if m.text == "/download":
         if m.replied_to is None or m.replied_to.document is None:
             await m.reply("Please reply to a message with a document present.")
