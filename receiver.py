@@ -15,10 +15,6 @@ bale_client = Client(dp)
 connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
 
 
-class MaxRetriesError(Exception):
-    pass
-
-
 async def download_file(
     file_id: int,
     access_hash: int,
@@ -72,7 +68,8 @@ async def download_file(
                         ):
                             os.remove(temp_filename)
                             print(
-                                f"Deleted partial file {temp_filename} due to HTTP status. will restart from beginning",
+                                f"Deleted partial file {temp_filename} due to HTTP status."
+                                "will restart from beginning",
                                 file=sys.stderr,
                             )
 
@@ -107,10 +104,9 @@ async def download_file(
                     file=sys.stderr,
                 )
 
-                if attempt == max_retries:
-                    raise MaxRetriesError(
-                        f"Failed to download file after {max_retries + 1} attempts"
-                    ) from e
+                if attempt >= max_retries:
+                    print("Max retries exceeded")
+                    return
 
                 delay = retry_delay * (1.5 * attempt)
                 print(f"Retrying in {delay:.2f} seconds...", file=sys.stderr)
