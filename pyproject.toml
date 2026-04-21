@@ -3,7 +3,7 @@ name = "bale-pigeon"
 version = "0.1.0"
 description = "Transfer files across country borders into the intranet using Bale Messenger."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = ["aiohttp>=3.13.5"]
 
 [project.optional-dependencies]
