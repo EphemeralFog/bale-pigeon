@@ -10,6 +10,7 @@ from aiobale import Client, Dispatcher  # type: ignore
 from aiobale.types import Message  # type: ignore
 
 CHAT_IDS: Set[int] = set()
+download_dir: str = "./"  # will be set from command line
 
 dp = Dispatcher()
 bale_client = Client(dp)
@@ -24,7 +25,9 @@ async def download_file(
     max_retries: int = 50,
     retry_delay: float = 1.5,
 ) -> Optional[str]:
-    temp_filename = f"{filename}.tmp"
+
+    full_path = os.path.join(download_dir, filename)
+    temp_path = full_path + ".tmp"
 
     for attempt in range(max_retries + 1):
         try:
@@ -37,8 +40,8 @@ async def download_file(
 
             headers: Dict[str, str] = dict()
 
-            if attempt > 0 and os.path.exists(temp_filename):
-                current_size = os.path.getsize(temp_filename)
+            if attempt > 0 and os.path.exists(temp_path):
+                current_size = os.path.getsize(temp_path)
 
                 if current_size > 0:
                     headers["Range"] = f"bytes={current_size}-"
@@ -61,15 +64,13 @@ async def download_file(
                         file_mode = "wb"
                     elif response.status == 416:
                         print("File already fully downloaded")
-                        os.replace(temp_filename, filename)
-                        return filename
+                        os.replace(temp_path, full_path)
+                        return full_path
                     else:
-                        if response.status in (500, 403) and os.path.exists(
-                            temp_filename
-                        ):
-                            os.remove(temp_filename)
+                        if response.status in (500, 403) and os.path.exists(temp_path):
+                            os.remove(temp_path)
                             print(
-                                f"Deleted partial file {temp_filename} due to HTTP status."
+                                f"Deleted partial file {temp_path} due to HTTP status. "
                                 "will restart from beginning",
                                 file=sys.stderr,
                             )
@@ -88,15 +89,15 @@ async def download_file(
                         message=f"HTTP {response.status}",
                     )
 
-                async with aiofiles.open(temp_filename, file_mode) as f:
+                async with aiofiles.open(temp_path, file_mode) as f:
                     if file_mode == "wb":
                         await f.truncate(0)
                     async for chunk in response.content.iter_chunked(1024 * 64):
                         await f.write(chunk)
 
-            os.replace(temp_filename, filename)
-            print(f"Download finished: {filename}")
-            return filename
+            os.replace(temp_path, full_path)
+            print(f"Download finished: {full_path}")
+            return full_path
 
         except Exception as e:
             print(
@@ -113,8 +114,9 @@ async def download_file(
             await asyncio.sleep(delay)
 
 
-@dp.message(lambda m: m.chat.id in CHAT_IDS)  # type: ignore
-async def msg_handler(m: Message) -> None:
+@dp.message()  # type: ignore
+async def message_handler(m: Message) -> None:
+    print(m)
     if m.text == "/download":
         if m.replied_to is None or m.replied_to.document is None:
             await m.reply("Please reply to a message with a document present.")
@@ -138,15 +140,20 @@ async def msg_handler(m: Message) -> None:
         )
 
 
-async def main(chat_ids: List[int]) -> None:
-    global _session
+async def main(chat_ids: List[int], download_directory: str = "./") -> None:
+    global _session, download_dir
+
     CHAT_IDS.update(chat_ids)
+    download_dir = download_directory
+
+    os.makedirs(download_dir, exist_ok=True)
 
     connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
     timeout = aiohttp.ClientTimeout(total=120)
     _session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
     try:
+        print("Starting bale_client...")
         await bale_client.start()  # type: ignore
     finally:
         await _session.close()
@@ -162,7 +169,14 @@ if __name__ == "__main__":
         required=True,
         help="The chat ids to download from :3",
     )
+    parser.add_argument(
+        "--directory",
+        "-d",
+        type=str,
+        default="./",
+        help="The directory to save the downloaded files to :3",
+    )
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.chat_id))
+    asyncio.run(main(args.chat_id, args.directory))
