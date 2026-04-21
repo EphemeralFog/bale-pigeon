@@ -1,7 +1,8 @@
+import argparse
 import asyncio
 import os
 import sys
-from typing import Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 
 import aiofiles
 import aiohttp
@@ -139,9 +140,25 @@ async def msg_handler(m: Message) -> None:
         )
 
 
-async def main() -> None:
+async def main(chat_ids: List[int]) -> None:
+    CHAT_IDS.update(chat_ids)
+
     await bale_client.start()  # type: ignore
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--chat-id",
+        "-c",
+        type=int,
+        action="append",
+        required=True,
+        help="The chat ids to download from :3",
+    )
+
+    args = parser.parse_args()
+
+    print(args)
+
+    asyncio.run(main(args.chat_id))
