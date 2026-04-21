@@ -12,3 +12,6 @@ wheels/
 
 # other generated files
 .mypy_cache
+
+# Sensetive files
+session.bale
