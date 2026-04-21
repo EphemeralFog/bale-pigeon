@@ -14,7 +14,7 @@ CHAT_IDS: Set[int] = set()
 dp = Dispatcher()
 bale_client = Client(dp)
 
-connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
+_session: Optional[aiohttp.ClientSession] = None
 
 
 async def download_file(
@@ -25,46 +25,45 @@ async def download_file(
     retry_delay: float = 1.5,
 ) -> Optional[str]:
     temp_filename = f"{filename}.tmp"
-    timeout = aiohttp.ClientTimeout(total=120)
 
-    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-        for attempt in range(max_retries + 1):
-            try:
-                file_info = await bale_client.get_file(file_id, access_hash)
+    for attempt in range(max_retries + 1):
+        try:
+            file_info = await bale_client.get_file(file_id, access_hash)
 
-                if file_info is None or not file_info.url:
-                    raise ValueError("File not found or URL missing")
+            if file_info is None or not file_info.url:
+                raise ValueError("File not found or URL missing")
 
-                url = file_info.url
+            url = file_info.url
 
-                headers: Dict[str, str] = dict()
+            headers: Dict[str, str] = dict()
 
-                if attempt > 0 and os.path.exists(temp_filename):
-                    current_size = os.path.getsize(temp_filename)
+            if attempt > 0 and os.path.exists(temp_filename):
+                current_size = os.path.getsize(temp_filename)
 
-                    if current_size > 0:
-                        headers["Range"] = f"bytes={current_size}-"
-                        print(f"Resuming from byte {current_size}")
-                        file_mode = "ab"
-                    else:
-                        file_mode = "wb"
+                if current_size > 0:
+                    headers["Range"] = f"bytes={current_size}-"
+                    print(f"Resuming from byte {current_size}")
+                    file_mode = "ab"
                 else:
                     file_mode = "wb"
+            else:
+                file_mode = "wb"
 
-                print(f"Download attempt {attempt + 1}/{max_retries + 1}: {url}")
+            print(f"Download attempt {attempt + 1}/{max_retries + 1}: {url}")
 
-                async with session.get(url, headers=headers) as response:
-                    if headers.get("Range"):
-                        if response.status == 206:
-                            print("Server accepted resume")
-                        elif response.status == 200:
-                            print("Server ignored Range header, restarting")
-                            file_mode = "wb"
-                        elif response.status == 416:
-                            print("File already fully downloaded")
-                            os.replace(temp_filename, filename)
-                            return filename
-
+            assert _session is not None
+            async with _session.get(url, headers=headers) as response:
+                if headers.get("Range"):
+                    if response.status == 206:
+                        print("Server accepted resume")
+                    elif response.status == 200:
+                        print("Server ignored Range header, restarting")
+                        file_mode = "wb"
+                    elif response.status == 416:
+                        print("File already fully downloaded")
+                        os.replace(temp_filename, filename)
+                        return filename
+                    else:
                         if response.status in (500, 403) and os.path.exists(
                             temp_filename
                         ):
@@ -74,7 +73,6 @@ async def download_file(
                                 "will restart from beginning",
                                 file=sys.stderr,
                             )
-
                         else:
                             raise aiohttp.ClientResponseError(
                                 response.request_info,
@@ -82,37 +80,37 @@ async def download_file(
                                 status=response.status,
                                 message=f"Unexpected status {response.status}",
                             )
-                    elif response.status != 200:
-                        raise aiohttp.ClientResponseError(
-                            response.request_info,
-                            response.history,
-                            status=response.status,
-                            message=f"HTTP {response.status}",
-                        )
+                elif response.status != 200:
+                    raise aiohttp.ClientResponseError(
+                        response.request_info,
+                        response.history,
+                        status=response.status,
+                        message=f"HTTP {response.status}",
+                    )
 
-                    async with aiofiles.open(temp_filename, file_mode) as f:
-                        if file_mode == "wb":
-                            await f.truncate(0)
-                        async for chunk in response.content.iter_chunked(1024 * 64):
-                            await f.write(chunk)
+                async with aiofiles.open(temp_filename, file_mode) as f:
+                    if file_mode == "wb":
+                        await f.truncate(0)
+                    async for chunk in response.content.iter_chunked(1024 * 64):
+                        await f.write(chunk)
 
-                os.replace(temp_filename, filename)
-                print(f"Download finished: {filename}")
-                return filename
+            os.replace(temp_filename, filename)
+            print(f"Download finished: {filename}")
+            return filename
 
-            except Exception as e:
-                print(
-                    f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}",
-                    file=sys.stderr,
-                )
+        except Exception as e:
+            print(
+                f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}",
+                file=sys.stderr,
+            )
 
-                if attempt >= max_retries:
-                    print("Max retries exceeded")
-                    return
+            if attempt >= max_retries:
+                print("Max retries exceeded")
+                return None
 
-                delay = retry_delay * (1.5 * attempt)
-                print(f"Retrying in {delay:.2f} seconds...", file=sys.stderr)
-                await asyncio.sleep(delay)
+            delay = retry_delay * (1.5 * attempt)
+            print(f"Retrying in {delay:.2f} seconds...", file=sys.stderr)
+            await asyncio.sleep(delay)
 
 
 @dp.message(lambda m: m.chat.id in CHAT_IDS)  # type: ignore
@@ -141,9 +139,17 @@ async def msg_handler(m: Message) -> None:
 
 
 async def main(chat_ids: List[int]) -> None:
+    global _session
     CHAT_IDS.update(chat_ids)
 
-    await bale_client.start()  # type: ignore
+    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
+    timeout = aiohttp.ClientTimeout(total=120)
+    _session = aiohttp.ClientSession(connector=connector, timeout=timeout)
+
+    try:
+        await bale_client.start()  # type: ignore
+    finally:
+        await _session.close()
 
 
 if __name__ == "__main__":
@@ -158,7 +164,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    print(args)
 
     asyncio.run(main(args.chat_id))
