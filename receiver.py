@@ -22,7 +22,7 @@ async def download_file(
     file_id: int,
     access_hash: int,
     filename: str,
-    max_retries: int = 50,
+    max_retries: int = 100,
     retry_delay: float = 1.5,
 ) -> Optional[str]:
 
