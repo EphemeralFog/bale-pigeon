@@ -6,20 +6,20 @@ Transfer files across country borders into the intranet using Bale Messenger, us
 
 File to Bale bridges external files to your internal network using Bale Messenger. It consists of two tightly coupled components:
 
-- **`uploader.py`** – Runs on an external server (outside the country). Watches for files or accepts stdin input and sends them to Bale.
+- **`sender.py`** – Runs on an external server (outside the country). Watches for files or accepts stdin input and sends them to Bale.
 - **`receiver.py`** – Runs on an internal server (inside the country). Listens for messages via Bale and saves the received files locally.
 
 ## Installation
 
 ### Using `uv` (Recommended)
 
-[`uv`](https://github.com/astral-sh/uv) is a fast Python package manager. It handles the separate dependencies for uploader and receiver cleanly.
+[`uv`](https://github.com/astral-sh/uv) is a fast Python package manager. It handles the separate dependencies for sender and receiver cleanly.
 
-**Uploader (External Server):**
+**Sender (External Server):**
 ```bash
-uv venv --seed .venv-uploader
-source .venv-uploader/bin/activate
-uv pip install -e ".[uploader]"
+uv venv --seed .venv-sender
+source .venv-sender/bin/activate
+uv pip install -e ".[sender]"
 ```
 
 **Receiver (Internal Server):**
@@ -33,11 +33,11 @@ uv pip install -e ".[receiver]"
 
 If you prefer standard Python tooling, you can use `pip` and `venv` directly.
 
-**Uploader (External Server):**
+**Sender (External Server):**
 ```bash
-python -m venv .venv-uploader
-source .venv-uploader/bin/activate
-pip install -e ".[uploader]"
+python -m venv .venv-sender
+source .venv-sender/bin/activate
+pip install -e ".[sender]"
 ```
 
 **Receiver (Internal Server):**
@@ -51,7 +51,7 @@ pip install -e ".[receiver]"
 
 If you prefer not to use editable installs (`-e`), install dependencies directly:
 
-**Uploader:**
+**Sender:**
 ```bash
 pip install aiohttp aiofiles
 ```
