@@ -1,6 +1,6 @@
-# File to Bale
+# Bale Pigeon
 
-A tool to transfer files to Bale without pain, using either file paths or directly from stdin.
+Transfer files across country borders into the intranet using Bale Messenger, using either file paths or directly from stdin.
 
 ## Overview
 
