@@ -1,18 +1,11 @@
 [project]
 name = "bale-pigeon"
 version = "0.1.0"
-description = "Add your description here"
+description = "Transfer files across country borders into the intranet using Bale Messenger."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = [
-    "aiohttp>=3.13.5",
-]
+dependencies = ["aiohttp>=3.13.5"]
 
 [project.optional-dependencies]
-receiver = [
-    "aiobale>=0.1.5",
-    "aiofiles>=23.2.1",
-]
-sender = [
-    "aiofiles>=23.2.1",
-]
+receiver = ["aiobale>=0.1.5", "aiofiles>=23.2.1"]
+sender = ["aiofiles>=23.2.1"]
