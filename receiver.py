@@ -1,11 +1,12 @@
-import sys
 import asyncio
+import os
+import sys
+from typing import Dict, Optional, Set
+
+import aiofiles
+import aiohttp
 from aiobale import Client, Dispatcher  # type: ignore
 from aiobale.types import Message  # type: ignore
-import aiohttp
-import os
-import aiofiles
-from typing import Set, Optional, Dict
 
 CHAT_IDS: Set[int] = set()
 
