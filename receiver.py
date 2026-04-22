@@ -25,6 +25,7 @@ async def download_file(
     max_retries: int = 100,
     retry_delay: float = 1.5,
 ) -> Optional[str]:
+    print(f"Downloading {filename}")
 
     full_path = os.path.join(download_dir, filename)
     temp_path = full_path + ".tmp"
@@ -32,17 +33,14 @@ async def download_file(
     for attempt in range(max_retries + 1):
         try:
             file_info = await bale_client.get_file(file_id, access_hash)
-
             if file_info is None or not file_info.url:
                 raise ValueError("File not found or URL missing")
 
             url = file_info.url
-
-            headers: Dict[str, str] = dict()
+            headers: Dict[str, str] = {}
 
             if attempt > 0 and os.path.exists(temp_path):
                 current_size = os.path.getsize(temp_path)
-
                 if current_size > 0:
                     headers["Range"] = f"bytes={current_size}-"
                     print(f"Resuming from byte {current_size}")
@@ -70,8 +68,8 @@ async def download_file(
                         if response.status in (500, 403) and os.path.exists(temp_path):
                             os.remove(temp_path)
                             print(
-                                f"Deleted partial file {temp_path} due to HTTP status. "
-                                "will restart from beginning",
+                                f"Deleted partial file {temp_path} due to HTTP {response.status}. "
+                                "Will restart from beginning.",
                                 file=sys.stderr,
                             )
                         else:
@@ -89,11 +87,23 @@ async def download_file(
                         message=f"HTTP {response.status}",
                     )
 
+                expected_size = response.content_length
+
                 async with aiofiles.open(temp_path, file_mode) as f:
                     if file_mode == "wb":
                         await f.truncate(0)
+
                     async for chunk in response.content.iter_chunked(1024 * 64):
                         await f.write(chunk)
+
+                actual_size = os.path.getsize(temp_path)
+                if actual_size == 0:
+                    raise ValueError("Downloaded file is empty (0 bytes)")
+                if expected_size is not None and actual_size < expected_size:
+                    raise ValueError(
+                        f"Incomplete download: got {actual_size} bytes, "
+                        f"expected {expected_size} bytes"
+                    )
 
             os.replace(temp_path, full_path)
             print(f"Download finished: {full_path}")
@@ -109,7 +119,7 @@ async def download_file(
                 print("Max retries exceeded")
                 return None
 
-            delay = retry_delay * (1.5 * attempt)
+            delay = retry_delay * (2 * attempt)
             print(f"Retrying in {delay:.2f} seconds...", file=sys.stderr)
             await asyncio.sleep(delay)
 
